@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exam Timetable Generator — CSP Scheduling Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="brand-block">
+    <div class="brand-mark">ET</div>
+    <div><h1>Exam Timetable Generator</h1><span class="brand-sub">CSP · Backtracking + MRV · Local Search</span></div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="setup">Setup</button>
+    <button class="tab-btn" data-tab="timetable">Timetable</button>
+    <button class="tab-btn" data-tab="compare">Compare</button>
+    <button class="tab-btn" data-tab="check">Conflict Check</button>
+  </nav>
+  <div class="header-actions">
+    <button class="btn btn-ghost btn-sm" id="themeBtn">☾ Dark</button>
+    <button class="btn btn-primary" id="generateBtn">✦ Generate Timetable</button>
+  </div>
+</header>
+<main>
+
+  <!-- ===================== SETUP ===================== -->
+  <div class="view active" id="view-setup">
+    <div class="hero"><h2>Build a conflict-free exam timetable</h2><p>Add your exams and rooms, then let the CSP engine do the scheduling.</p></div>
+    <div class="stat-row">
+      <div class="stat"><span class="stat-num" id="statExams">0</span><span class="stat-lbl">Exams to schedule</span></div>
+      <div class="stat"><span class="stat-num" id="statRooms">0</span><span class="stat-lbl">Rooms available</span></div>
+      <div class="stat"><span class="stat-num" id="statSlots">0</span><span class="stat-lbl">Total exam slots</span></div>
+      <div class="stat"><span class="stat-num" id="statCap">0</span><span class="stat-lbl">Total seating capacity</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Exam period</h2>
+          <div class="panel-desc">Set how many exam days you have and the time slots offered each day. Every subject will be scheduled into one of these slots.</div>
+        </div>
+      </div>
+      <div class="period-grid">
+        <div>
+          <label class="field-label" for="daysInput">Number of days</label>
+          <input type="number" id="daysInput" min="1" max="21" value="4">
+        </div>
+        <div>
+          <label class="field-label">Slots per day</label>
+          <div class="slot-list" id="slotList"></div>
+          <div class="table-toolbar" style="justify-content:flex-start; margin-top:10px;">
+            <button class="btn btn-ghost btn-sm" id="addSlotBtn">+ Add slot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Subjects &amp; exams</h2>
+          <div class="panel-desc">Each row is one exam to schedule: which cohort sits it, who invigilates, how many students, how difficult it is, and what kind of room it needs.</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="loadSampleBtn">Load sample data</button>
+          <button class="btn btn-danger-ghost btn-sm" id="clearSubjectsBtn">Clear all</button>
+        </div>
+      </div>
+      <table class="data-table" id="subjectsTable">
+        <thead>
+          <tr>
+            <th style="width:11%">Code</th>
+            <th style="width:19%">Subject name</th>
+            <th style="width:14%">Group(s)</th>
+            <th style="width:14%">Faculty</th>
+            <th style="width:8%">Size</th>
+            <th style="width:11%">Difficulty</th>
+            <th style="width:13%">Room type</th>
+            <th style="width:4%"></th>
+          </tr>
+        </thead>
+        <tbody id="subjectsBody"></tbody>
+      </table>
+      <div class="table-toolbar">
+        <button class="btn btn-ghost btn-sm" id="addSubjectBtn">+ Add subject</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Rooms</h2>
+          <div class="panel-desc">Rooms the scheduler can assign exams to. Halls can host any exam type if they're large enough; labs are reserved for lab exams.</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-danger-ghost btn-sm" id="clearRoomsBtn">Clear all</button>
+        </div>
+      </div>
+      <table class="data-table" id="roomsTable">
+        <thead>
+          <tr>
+            <th style="width:34%">Room name</th>
+            <th style="width:20%">Capacity</th>
+            <th style="width:26%">Type</th>
+            <th style="width:20%"></th>
+          </tr>
+        </thead>
+        <tbody id="roomsBody"></tbody>
+      </table>
+      <div class="table-toolbar">
+        <button class="btn btn-ghost btn-sm" id="addRoomBtn">+ Add room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TIMETABLE ===================== -->
+  <div class="view" id="view-timetable">
+    <div id="timetableEmpty" class="panel empty-state">
+      <h3>No timetable yet</h3>
+      <div>Add your subjects and rooms in Setup, then click <strong>Generate Timetable</strong>.</div>
+    </div>
+
+    <div id="timetableContent" style="display:none;">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Solver run</h2>
+            <div class="panel-desc" id="solverSummary"></div>
+          </div>
+        </div>
+        <div class="status-line" id="solverStats"></div>
+      </div>
+
+      <div class="score-row">
+        <div class="score-card">
+          <div class="num success" id="hardComplianceNum">100%</div>
+          <div class="lbl">Hard-constraint compliance — no student, faculty, room or capacity clashes</div>
+        </div>
+        <div class="score-card">
+          <div class="num" id="optScoreNum">–/100</div>
+          <div class="lbl">Optimization score — spacing &amp; daily-load balance</div>
+        </div>
+        <div class="score-card">
+          <div class="num gold" id="candidateCountNum">0</div>
+          <div class="lbl">Candidate timetables generated and compared</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div><h2>Timetable</h2><div class="panel-desc">Drag any exam to another slot — valid slots light up, and hard constraints are always enforced. <span class="legend"><i class="diff-dot diff-hard"></i> Hard <i class="diff-dot diff-medium"></i> Medium <i class="diff-dot diff-easy"></i> Easy</span></div></div>
+          <div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" id="exportBtn">⬇ Export CSV</button><button class="btn btn-ghost btn-sm" id="printBtn">⬇ Save as PDF</button></div>
+        </div>
+        <div class="filter-row">
+          <select id="filterGroup"><option value="">All groups</option></select>
+          <select id="filterFaculty"><option value="">All faculty</option></select>
+          <select id="filterRoom"><option value="">All rooms</option></select>
+        </div>
+        <div class="tt-wrap">
+          <div id="ttGrid" class="tt-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== COMPARE ===================== -->
+  <div class="view" id="view-compare">
+    <div id="compareEmpty" class="panel empty-state">
+      <h3>Nothing to compare yet</h3>
+      <div>Generate a timetable first — the engine explores several valid candidates and ranks them here.</div>
+    </div>
+    <div id="compareContent" style="display:none;">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Candidate timetables</h2>
+            <div class="panel-desc">All candidates satisfy every hard constraint by construction. They're ranked by how well they minimize soft-constraint penalties — clustering of hard exams and uneven daily load.</div>
+          </div>
+        </div>
+        <div class="compare-grid" id="compareGrid"></div>
+      </div>
+      <div class="panel why-panel" id="whyPanel" style="display:none;">
+        <h2>Why the top candidate wins</h2>
+        <ul id="whyList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CONFLICT CHECK ===================== -->
+  <div class="view" id="view-check">
+    <div id="checkEmpty" class="panel empty-state">
+      <h3>No timetable to verify</h3>
+      <div>Generate a timetable first, then this page independently re-checks it for conflicts.</div>
+    </div>
+    <div id="checkContent" style="display:none;">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Independent conflict check</h2>
+            <div class="panel-desc">This re-derives every constraint from scratch against the chosen timetable — it doesn't trust the solver's own bookkeeping.</div>
+          </div>
+        </div>
+        <div class="check-list" id="checkList"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script src="js/app.js"></script>
+</body>
+</html>
